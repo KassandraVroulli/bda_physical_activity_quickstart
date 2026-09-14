@@ -1,6 +1,15 @@
 library(tidyverse)
+library(caret, warn.conflicts = FALSE)
+options(width = 100)
 
 on_kaggle <- dir.exists("/kaggle/input")
-data_dir <- if (on_kaggle) "/kaggle/input/TODO" else here::here("data")
+data_dir <- if (on_kaggle) {
+  list.files("/kaggle/input/competitions", full.names = TRUE)[1]
+} else {
+  here::here("data")
+}
 output_dir <- if (on_kaggle) "/kaggle/working" else here::here("output")
 dir.create(output_dir, showWarnings = FALSE)
+
+train_dir <- file.path(data_dir, "RawData", "Train")
+test_dir <- file.path(data_dir, "RawData", "Test")

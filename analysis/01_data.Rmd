@@ -3,15 +3,186 @@ source(here::here("setup.R"))
 for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
 ```
 
-# Data
-
-<!-- Data description, sampling plan and generalisability -->
-
 ```{r}
+# List the files
 list.files(data_dir)
+
+# show the content of the labels file
+file.show(file.path(data_dir, "activity_labels.txt"))
 ```
 
+The data files themselves are stored in the 'RawData' folder. This folder contains a folder 'Train' and a folder 'Test'. Let's look at the list of filenames in the 'Train' folder:
+
+```{r}
+# Train and Test folder are located in the RawData folder
+list.files(file.path(data_dir, "RawData"))
+
+# The Train folder contains 85 files:
+length(list.files(train_dir))
+
+# A sample of the file names in the Train folder; notice the filename pattern
+set.seed(1)
+sample(list.files(train_dir), 6)
+```
+
+# 1. Reading the data
+
+The data are stored in plain text (`.txt`) files.
+
+* **Signal files:** Each experimental run has accelerometer and gyroscope recordings.
+
+  * Filenames identify both the experiment and the subject.
+  * Experiments are labeled `exp01` through `exp61`, and subjects are labeled `user01` through `user30`.
+  * Each subject may appear in more than one experiment.
+  * Example: `acc_exp01_user01.txt` → accelerometer signals for experiment 1 in which `user01` was the subject. `gyro_exp01_user01.txt` → gyroscope signals for the same run.
+
+* **Label file:** Activity labels for all experiments are stored in a single text file called `labels.txt`.
+
+  * Instead of labeling every time point, the file lists time intervals: each interval has a `start`, `end`, and activity code `act_code` (numbered 1 through 12).
+  * These intervals correspond to segments of the signals in `acc_expXX_userYY.txt` and `gyro_expXX_userYY.txt`.
+  * the names of activity codes are stored in the file `activity_labels.txt`
+
+**Goal:** To analyze the data, we need to merge the signals with their activity code and labels. In practice, this means reading the signals (each row = one time point) and assigning the correct label from `labels.txt` to each time point.
+
+## 1.1 Import Activity labels
+
+First import the activity labels:
+
+```{r}
+act_labels <- read.table(
+  file.path(data_dir, "activity_labels.txt"),
+  header = FALSE, col.names = c("code", "activity")
+)
+act_labels
+```
+
+Each signal file contains three columns, one for each sensor channel, corresponding to the *X*, *Y*, and *Z* directions. The file consists of a sequence of measurements, called *samples*, with each row representing one sample (i.e., one time point).
+
+The file `labels.txt` provides the activity annotations. For each experiment (which in this file is called 'trial'), it lists:
+
+* the trial number,
+* the user ID,
+* the activity code,
+* the sample number at which the activity starts, and
+* the sample number at which the activity ends.
+
+```{r}
+labels0 <- read_delim(file.path(train_dir, "labels_train.txt"),
+  delim = " ",
+  col_names = c("trial", "userid", "act_code", "start", "end"), col_types = "iiiii"
+)
+labels0 |> head()
+```
+
+To make the activity information more interpretable, we join the activity codes from `labels.txt` with the descriptive labels in `activity_labels`.
+
+```{r}
+labels <- labels0 |> left_join(act_labels, by = c(act_code = "code"))
+head(labels)
+tail(labels)
+```
+
+The resulting data frame shows, for each trial and user, the sample interval (`start` and `end`) corresponding to each activity. Note that some activities repeat, so you may see multiple intervals with the same label (e.g., several bouts of `WALKING_UPSTAIRS`).
+
+Each participant may have multiple signal files (from different trials). For this reason, it is easiest to think in terms of *files* rather than *users*. In this example, we will focus on accelerometer files (filenames starting with `acc`). Each filename encodes both the user ID (prefixed `user`) and the trial ID (prefixed `exp`). Although the trial ID is not very informative on its own, we need it to match the correct rows from the labels data. We use regular expressions to extract these IDs from the filenames.
+
+## 1.2 Import the signals
+
+To begin, we'll focus on a single file: the accelerometer signals for participant `user01` in trial `exp01`. We will import the signals and then label each sample with the activity intervals stored in the `labels` data frame. Finally, we'll visualize the full signal, with different activities highlighted in different colors.
+
+```{r}
+# file path
+filename <- file.path(train_dir, "acc_exp01_user01.txt")
+
+# extract parts of the filename
+username <- str_extract(filename, "(?<=user)\\d+") |> as.integer()
+expname <- str_extract(filename, "(?<=exp)\\d+") |> as.integer()
+
+# import the data
+user01 <- read_delim(filename, delim = " ", col_names = FALSE, col_types = "ddd")
+```
+
+Let's have a peek at the imported data to make sure nothing went wrong:
+
+```{r}
+glimpse(user01)
+```
+
+Each column in the file represents one signal channel. Each row corresponds to a single measurement (a *sample*), and the row number serves as our time indicator. To avoid confusion, we will refer to this as the *sample number*.
+
+As a quick check — both to confirm that the signals were read correctly and to get a feel for the data structure — let's plot the waveforms of the signals:
+
+```{r}
+options(repr.plot.width = 12)
+
+plot.ts(user01, xlab = "Sample number")
+```
+
+## 1.3 Merging Signals and Labels
+
+We can clearly see that different signal segments correspond to different activities. There is some regularity to the signals. The data seem to have been read in correctly. Since activities repeat at different times during a recording, we need to label **each sample** in the signal with the correct activity.
+
+The `labels` data frame already contains this information, but in a compact format: each row specifies the `start` and `end` sample of an activity for a given `trial` and `userid`. For example, the first two rows are:
+
+```{r}
+print(labels[1:2, ])
+```
+
+For analysis, it is more convenient to expand this into a table that gives an activity label for **every sample**. That way, we can merge the signals (one row per sample) with their corresponding labels.
+
+We can do this using `dplyr::reframe()`.
+
+* You already know `summarise()`: it reduces many rows into one.
+* `reframe()` is similar, but instead of returning a single row, it can return *many rows* for each group. This makes it perfect for expanding the interval `start:end` into the full sequence of sample IDs.
+
+There is one more subtlety: many activities occur multiple times within a single trial. For instance, a participant might walk upstairs twice during the same experiment. If we only used the activity name, both bouts would look identical once expanded. To keep them distinct, we add a `segment` identifier using `row_number()`, which assigns a unique ID to each activity interval.
+
+```{r}
+sample_labels <- labels |>
+  mutate(segment = row_number()) |> # identify each separate activity interval
+  reframe(
+    sampleid = seq.int(start, end), # expand start:end into all sample IDs
+    .by = c(trial, userid, act_code, activity, segment)
+  )
+```
+
+Now `sample_labels` has one row per sample, with the correct activity already attached and each activity interval identified by `segment`. This expanded form is exactly what we need to merge the signals (rows = samples) with the activity labels:
+
+```{r}
+sample_labels |> head()
+sample_labels |> tail() # always check both ends of the data frame to make sure things are correct
+```
+
+Now that we have each sample labeled with an activity, we can add the corresponding signal values from `user01`.
+
+We'll first create a tibble that contains the `userid`, the `trial` number, and a `sampleid` for each row in `user01`. Then we bind in the three signal columns (`X1`, `X2`, `X3`) and finally (left) join this table with `sample_labels` so that every sample has the correct activity label:
+
+```{r}
+user_df <-
+  tibble(userid = username, trial = expname, sampleid = seq.int(0, nrow(user01) - 1)) |>
+  bind_cols(user01) |>
+  left_join(sample_labels, by = c("userid", "trial", "sampleid"))
+
+# Check the result (first few rows are not interesting; the following are)
+print(user_df[1227:1239, ])
+```
+
+This table is exactly what we need: each sample in the three signal channels is now labeled with its corresponding activity.
+
+To check if the labeling is correct, we can visualize the result. The plot below shows the first signal channel (`X1`), with different colors indicating different activities:
+
+```{r}
+options(repr.plot.width = 15) # widen the plot for readability
+
+user_df %>%
+  filter(!is.na(activity)) %>% # keep only labeled samples
+  ggplot(aes(x = sampleid, y = X1, colour = factor(activity), group = segment)) +
+  geom_line()
+```
+
+Notice that there are gaps in the signal between different activities. These gaps correspond to samples that are unlabeled (and therefore appear with label `NA` — check the data frame and cross-check with the information in the `labels` data frame to make sure you understand this).
+
 ```{r, include = FALSE}
-# Save results for the next notebooks, e.g.
-# saveRDS(data, file.path(output_dir, "data.rds"))
+saveRDS(sample_labels, file.path(output_dir, "sample_labels.rds"))
+saveRDS(user_df, file.path(output_dir, "user_df.rds"))
 ```

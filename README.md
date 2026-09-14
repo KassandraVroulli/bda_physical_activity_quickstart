@@ -57,9 +57,8 @@ If you add a package, run `renv::snapshot()` and commit `renv.lock`.
 
 ## Submitting to Kaggle
 
-1. Set the Kaggle data path in `setup.R` (`/kaggle/input/...`).
-2. Run `build_notebook.R` (click **Source** in RStudio).
-3. On Kaggle, create a notebook, choose **File → Import Notebook**, and upload `output/notebook.ipynb`.
-4. Add the competition data, then **Save Version** and submit the output.
+1. Run `build_notebook.R` (click **Source** in RStudio).
+2. On Kaggle, create a notebook, choose **File → Import Notebook**, and upload `output/notebook.ipynb`.
+3. Add the competition data, then **Save Version** and submit `submission.csv` from the output.
 
 Don't edit the generated notebook on Kaggle; change the files in the repository and build again.

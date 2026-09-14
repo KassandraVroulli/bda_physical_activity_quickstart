@@ -1,17 +1,46 @@
 ```{r, include = FALSE}
 source(here::here("setup.R"))
 for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
-# features <- readRDS(file.path(output_dir, "features.rds"))
+myData <- readRDS(file.path(output_dir, "myData.rds"))
 ```
 
-# Models
+# 4. Model fitting
 
-<!-- Validation approach, baseline, models and tuning -->
+You should maybe think about the following issues
 
-# Results
+- What do you do with the unlabelled epochs? That is, the epochs that are marked with `-`?
+- For the competition submision you should only provide predictions for the epochs defined in the sample submission file
+- Should you remove the epochs that do not consist of 128 samples (i.e., `n ≠ 128` in the above data frame)?
 
-<!-- Model comparison, final model, submission -->
+```{r}
+## Fitting classifier models from ISLR Chapter 4
+##
 
-```{r submission}
-# write_csv(submission, file.path(output_dir, "submission.csv"))
+# Remove non-feature columns
+myData2 <- myData |> select(-c("epoch", "sampleid", "user_id", "exp_id", "n_samples"))
+
+preproc <- preProcess(myData2, method = c("nzv", "corr", "center", "scale", "medianImpute"), thresh = 0.95)
+preproc
+
+myData2 <- predict(preproc, myData2)
+
+lincomb <- myData2 |>
+  select_if(is.numeric) |>
+  findLinearCombos()
+redundant <- names(myData2 |> select_if(is.numeric))[lincomb$remove]
+myData2 <- myData2 |> select(-all_of(redundant))
+
+# ...
+# ... Your modeling code goes here
+# ...
+
+trcntr <- trainControl("cv", 5)
+fit_lda <- train(activity ~ mean_X2 + sd_X1 + AR1_X1_lag1, myData2, method = "lda", trControl = trcntr)
+fit_lda
+```
+
+```{r, include = FALSE}
+saveRDS(preproc, file.path(output_dir, "preproc.rds"))
+saveRDS(redundant, file.path(output_dir, "redundant.rds"))
+saveRDS(fit_lda, file.path(output_dir, "fit_lda.rds"))
 ```
