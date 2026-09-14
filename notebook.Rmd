@@ -1,0 +1,27 @@
+---
+output: html_document
+jupyter:
+  kernelspec:
+    name: ir
+    display_name: R
+    language: R
+---
+
+# Physical activity recognition
+
+<!-- Team, goal of the competition -->
+
+```{r setup, message = FALSE, code = readLines(here::here("setup.R"))}
+source(here::here("setup.R"))
+```
+
+```{r functions, code = xfun::read_all(list.files(here::here("R"), full.names = TRUE))}
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+```
+
+```{r notebooks, child = list.files(here::here("analysis"), full.names = TRUE)}
+```
+
+# Conclusion
+
+<!-- Summary, division of labour, credits -->

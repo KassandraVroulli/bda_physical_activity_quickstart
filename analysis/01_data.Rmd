@@ -1,0 +1,17 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+```
+
+# Data
+
+<!-- Data description, sampling plan and generalisability -->
+
+```{r}
+list.files(data_dir)
+```
+
+```{r, include = FALSE}
+# Save results for the next notebooks, e.g.
+# saveRDS(data, file.path(output_dir, "data.rds"))
+```

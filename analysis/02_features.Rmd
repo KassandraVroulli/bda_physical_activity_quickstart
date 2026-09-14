@@ -1,0 +1,13 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+# data <- readRDS(file.path(output_dir, "data.rds"))
+```
+
+# Features
+
+<!-- For every feature family: what, why, how, results, interpretation -->
+
+```{r, include = FALSE}
+# saveRDS(features, file.path(output_dir, "features.rds"))
+```

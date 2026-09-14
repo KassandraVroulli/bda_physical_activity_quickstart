@@ -1,0 +1,17 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+# features <- readRDS(file.path(output_dir, "features.rds"))
+```
+
+# Models
+
+<!-- Validation approach, baseline, models and tuning -->
+
+# Results
+
+<!-- Model comparison, final model, submission -->
+
+```{r submission}
+# write_csv(submission, file.path(output_dir, "submission.csv"))
+```
