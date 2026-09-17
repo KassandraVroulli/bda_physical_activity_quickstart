@@ -1,0 +1,74 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+acc_df <- readRDS(file.path(output_dir, "acc_df.rds"))
+gyro_df <- readRDS(file.path(output_dir, "gyro_df.rds"))
+```
+
+# Time domain features
+
+## Histograms
+
+Histograms give a detailed picture of the distribution of the signal values.
+For instance, have a look at the histograms of the signal samples per activity:
+
+```{r}
+plot_signal_df_hist <- function(x) {
+  x |>
+    filter(!is.na(activity)) %>% # keep only labeled samples
+    ggplot(aes(X1)) +
+    geom_histogram(bins = 40, fill = 1, alpha = 0.5) +
+    geom_histogram(aes(X2), bins = 40, fill = 2, alpha = 0.5) +
+    geom_histogram(aes(X3), bins = 40, fill = 4, alpha = 0.5) +
+    facet_wrap(~activity, scales = "free_y")
+}
+
+# Plot a histogram of the accelerometer signal, separated by activity
+plot_signal_df_hist(acc_df)
+```
+
+```{r}
+# Plot a histogram of the gyroscope signal, separated by activity
+plot_signal_df_hist(gyro_df)
+```
+
+**The histograms for different activities look quite distinct.** This means that statistical summaries
+(mean, standard deviation, skewness, etc.) could help us tell the activities apart.
+
+* the center (mean),
+* the spread (standard deviation, interquartile range, min-max range),
+* the shape (skewness, kurtosis),
+* ...and so on.
+
+## Feature extraction
+
+```{r}
+# Compute features per epoch for acc
+time_features_acc <- get_time_domain_features(acc_df)
+head(time_features_acc)
+
+# Compute features per epoch for gyro
+time_features_gyro <- get_time_domain_features(gyro_df)
+head(time_features_gyro)
+
+# Plot the confidence levels for each activity label
+time_features_gyro |>
+  filter(aggr_activity != "-") |>
+  ggplot(aes(x = aggr_activity, y = activity_confidence)) +
+  geom_boxplot() +
+  facet_wrap(~aggr_activity, scales = "free_x") +
+  theme(axis.text.x = element_blank()) +
+  labs(x = "Activity label", y = "Confidence of activity label")
+```
+
+This is a tidy data frame that can be used in the classification algorithms discussed in chapters 3 and 4 of ISLR.
+
+***Note**: You may not be familiar with the `AR1.1`, `AR1.2` and `AR12.1` computed above.
+These are called _autocorrelations_ (at lags 1 and 2) and _lagged cross-correlations_.
+They are discussed in [Feature Extraction from Signals](https://paper.dropbox.com/doc/Feature-extraction-from-Signals--A62tmtXDMS34X292NP0fKphQAQ-qCp5uvj47gmyuw5nmB8lL).
+They are interesting because slowly changing signals have high autocorellations, while fast changing signals have low or even negative autocorrelations.*
+
+```{r, include = FALSE}
+saveRDS(time_features_acc, file.path(output_dir, "time_features_acc.rds"))
+saveRDS(time_features_gyro, file.path(output_dir, "time_features_gyro.rds"))
+```

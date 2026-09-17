@@ -1,0 +1,73 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+acc_df <- readRDS(file.path(output_dir, "acc_df.rds"))
+gyro_df <- readRDS(file.path(output_dir, "gyro_df.rds"))
+```
+
+# Frequency domain features
+
+## Spectrograms
+
+As we looked at histograms of the signal values, we can also look at the spectragrams of the signals.
+The spectrum is a representation of the signal in the frequency domain, which can reveal periodic patterns that are not obvious in the time domain.
+
+```{r}
+plot_signal_df_spectrograms <- function(x) {
+  gaussian_sigma <- 3
+  x |>
+    filter(!is.na(activity)) |>
+    group_by(activity) |>
+    reframe(
+      spec1 = list(compute_spectrum(X1, gaussian_sigma = gaussian_sigma)),
+      spec2 = list(compute_spectrum(X2, gaussian_sigma = gaussian_sigma)),
+      spec3 = list(compute_spectrum(X3, gaussian_sigma = gaussian_sigma))
+    ) |>
+    ungroup() |>
+    pivot_longer(cols = starts_with("spec"), names_to = "signal", values_to = "spectrum") |>
+    unnest(cols = c(spectrum)) |>
+    ggplot(aes(x = freq, y = spec, colour = signal)) +
+    geom_line() +
+    scale_y_log10() +
+    facet_wrap(~activity) +
+    labs(x = "Frequency", y = "Spectral density (log scale)", colour = "Signal channel")
+}
+
+# Plot a spectrogram of the accelerometer signal, separated by activity
+plot_signal_df_spectrograms(acc_df)
+```
+
+```{r}
+# Plot a spectrogram of the gyroscope signal, separated by activity
+plot_signal_df_spectrograms(gyro_df)
+```
+
+## Converting signals to the frequency domain
+
+Describe a signal in the **frequency domain**.
+
+```{r}
+# Compute spectra for each epoch
+acc_spect_df <- convert_signal_to_spectrum_df(acc_df)
+gyro_spect_df <- convert_signal_to_spectrum_df(gyro_df)
+head(acc_spect_df)
+```
+
+Now we have a tidy data frame with the spectrum of each signal in each epoch.
+
+## Feature extraction
+
+```{r}
+# Compute frequency-domain features per epoch for acc
+spect_features_acc <- get_frequency_domain_features(acc_spect_df)
+head(spect_features_acc)
+
+# Compute frequency-domain features per epoch for gyro
+spect_features_gyro <- get_frequency_domain_features(gyro_spect_df)
+head(spect_features_gyro)
+```
+
+```{r, include = FALSE}
+saveRDS(spect_features_acc, file.path(output_dir, "spect_features_acc.rds"))
+saveRDS(spect_features_gyro, file.path(output_dir, "spect_features_gyro.rds"))
+```

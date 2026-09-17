@@ -1,0 +1,30 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+df_test <- readRDS(file.path(output_dir, "df_test.rds"))
+best_fit <- readRDS(file.path(output_dir, "best_fit.rds"))
+```
+
+# Submissions
+
+## Predicting test data
+
+```{r}
+df_test[is.na(df_test)] <- 0
+df_test_pp <- make_data(df_test |> select(-Id), best_fit$key, best_fit$pp_utils)
+predictions <- predict(best_fit$model, df_test_pp)
+```
+
+## Formatting the submission file
+
+To help you turning your predictions into the right format, the following code can help.
+
+```{r}
+df_test_predicted <- df_test |>
+  mutate(Predicted = predictions) |>
+  select(Id, Predicted)
+write_csv(df_test_predicted, file.path(output_dir, "submission.csv"))
+
+# Check the result: print first 20 lines in the submission file
+cat(readLines(file.path(output_dir, "submission.csv"), 20), sep = "\n")
+```
